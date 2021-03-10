@@ -12,9 +12,6 @@ Segments of code have been used from:
     - the original WaveGAN code by Chris Donahue
     https://github.com/chrisdonahue/wavegan/
     
-    - the conditional WaveGAN by Adrian Barahona
-    https://github.com/adrianbarahona/conditional_wavegan_knocking_sounds/
-    
     - the official Keras documentation on WGAN-GP (for defining the loss)
     https://keras.io/examples/generative/wgan_gp/
 
@@ -49,24 +46,6 @@ def apply_phaseshuffle(x, rad, pad_type='reflect'):
     x = x[:, phase_start:phase_start+x_len]
     x.set_shape([b, x_len, nch])
 
-    return x
-
-def Conv1DTranspose(input_tensor, filters, kernel_size, strides=4, padding='same'
-                    , name = None, activation = 'relu'):
-    '''
-    1D Convolutional Transpose layer
-    
-    Keras does not offer a callable transpose convolutional layer in 1D, 
-    so one has to be defined using the 2D counterpart.
-    
-    Credit for this code to Adrian Barahona, who implemented it in his 
-    conditional version of the WaveGAN:
-    https://github.com/adrianbarahona/conditional_wavegan_knocking_sounds/
-    '''
-    x = layers.Conv2DTranspose(filters=filters, kernel_size=(1, kernel_size), strides=(1, strides), padding=padding, 
-                        name = name, activation = activation)(keras.backend.expand_dims(input_tensor, axis=1))
-    x = keras.backend.squeeze(x, axis=1)
-    
     return x
 
 #%%
@@ -126,30 +105,31 @@ def make_generator(latent_dim = 100,
                    dim = 64,
                    kernel_len = 25,
                    shape_before_flatten = (None, 16, 1024)):
+  
     generator_input = layers.Input(shape = (latent_dim,))
     
     x = layers.Dense(audio_input_dim)(generator_input)
     x = layers.Reshape((shape_before_flatten[1], shape_before_flatten[2]))(x)
     x = layers.ReLU()(x)
     
-    x = Conv1DTranspose(x, dim * 8, kernel_size = kernel_len)
+    x = layers.Conv1DTranspose(dim * 8, kernel_size = kernel_len, strides=4, padding = 'same', name = 'deconv4')(x)
     x = layers.ReLU()(x)
     
-    x = Conv1DTranspose(x, dim * 4, kernel_size = kernel_len)
+    x = layers.Conv1DTranspose(dim * 4, kernel_size = kernel_len, strides=4, padding = 'same', name = 'deconv3')(x)
     x = layers.ReLU()(x)
     
-    x = Conv1DTranspose(x, dim * 2, kernel_size = kernel_len)
+    x = layers.Conv1DTranspose(dim * 2, kernel_size = kernel_len, strides=4, padding = 'same', name = 'deconv2')(x)
     x = layers.ReLU()(x)
-    
-    x = Conv1DTranspose(x, dim, kernel_size = kernel_len)
+
+    x = layers.Conv1DTranspose(dim, kernel_size = kernel_len, strides=4, padding = 'same', name = 'deconv1')(x)
     x = layers.ReLU()(x)
-    
-    x = Conv1DTranspose(x, 1, kernel_size = kernel_len, activation = 'tanh')
-    
+
+    x = layers.Conv1DTranspose(1, kernel_size = kernel_len, strides=4, padding = 'same', activation = 'tanh', name = 'deconv0')(x)
+
     generator_output = x
-    
+
     generator = keras.Model(generator_input, generator_output, name = 'generator')
-    
+
     return generator
 
 #%%
